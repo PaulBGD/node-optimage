@@ -6,6 +6,7 @@ var optimage = module.exports = exports = function (options, done){
 
     var inputFile = options.inputFile;
     var outputFile = options.outputFile;
+    var extension = options.extension || path.extname(inputFile);
     var verbose = options.verbose;
     var level = options.level;
     var progressive = options.progressive;
@@ -14,7 +15,7 @@ var optimage = module.exports = exports = function (options, done){
 
     outputFile = outputFile || inputFile;
 
-    switch ( path.extname(inputFile) ){
+    switch ( extension ){
 
         // 1. Basic optimisation
         // optipng xx.png -out xx2.png
@@ -58,7 +59,7 @@ var optimage = module.exports = exports = function (options, done){
             break;
         
         default:
-            return;
+            throw new Error('Invalid extension');
     }
 
     var originalSize = fs.statSync(inputFile).size;
