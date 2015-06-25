@@ -2,7 +2,7 @@ var fs = require('fs');
 var path = require('path');
 var execFile = require('child_process').execFile;
 
-var optimage = module.exports = exports = function (options, done){
+var optimage = module.exports = exports = function (options, done) {
 
     var inputFile = options.inputFile;
     var outputFile = options.outputFile;
@@ -10,12 +10,27 @@ var optimage = module.exports = exports = function (options, done){
     var verbose = options.verbose;
     var level = options.level;
     var progressive = options.progressive;
-    var binPath= '';
-    var args= [];
+    var binPath = '';
+    var args = [];
 
     outputFile = outputFile || inputFile;
 
-    switch ( extension ){
+    var start = function () {
+        execFile(binPath, args, function (err, stdout, stderr) {
+            if (err) {
+                return done(err, options);
+            }
+
+            if (verbose) {
+                stdout && console.log(stdout);
+                stderr && console.log(stderr);
+            }
+
+            done(err, options);
+        });
+    };
+
+    switch (extension) {
 
         // 1. Basic optimisation
         // optipng xx.png -out xx2.png
@@ -33,11 +48,29 @@ var optimage = module.exports = exports = function (options, done){
             binPath = require('optipng-bin').path;
             // OptiPNG can't overwrite without creating a backup file
             // https://sourceforge.net/tracker/?func=detail&aid=3607244&group_id=151404&atid=780913
-            if (path.resolve(outputFile) !== path.resolve(inputFile) && fs.existsSync(outputFile)) {
-                fs.unlinkSync(outputFile);
+            function png(err) {
+                if (err) {
+                    return done(err, options);
+                }
+                if (options.arg) args = args.concat(options.arg);
+                args.push('-strip', 'all', inputFile, "-out", outputFile, '-o', level || 2);
+                start();
             }
-            if(options.arg) args = args.concat(options.arg);
-            args.push('-strip', 'all', inputFile, "-out", outputFile, '-o', level||2 );
+
+            if (path.resolve(outputFile) !== path.resolve(inputFile)) {
+                fs.exists(outputFile, function (err, exists) {
+                    if (err) {
+                        return done(err, options);
+                    }
+                    if (exists) {
+                        fs.unlink(outputFile, png);
+                    } else {
+                        png();
+                    }
+                });
+            } else {
+                png();
+            }
             break;
 
         // jpegtran [switches] inputfile outputfile
@@ -45,41 +78,24 @@ var optimage = module.exports = exports = function (options, done){
         case '.jpeg':
             binPath = require('jpegtran-bin').path;
             args.push('-copy', 'none', '-optimize');
-            if(progressive) args.push('-progressive');
-            if(options.arg) args = args.concat(options.arg);
+            if (progressive) args.push('-progressive');
+            if (options.arg) args = args.concat(options.arg);
             args.push('-outfile', outputFile, inputFile)
+            start();
             break;
-        
+
         // maybe support to do a merge with frames?
         // that means we need an array for inputOutput.
         case '.gif':
             binPath = require('gifsicle').path;
-            args.push('-o', outputFile, inputFile, '-O', level||2 );
+            args.push('-o', outputFile, inputFile, '-O', level || 2);
             if (options.arg) arg = args.concat(options.arg);
+            start();
             break;
-        
+
         default:
             throw new Error('Invalid extension');
     }
-
-    var originalSize = fs.statSync(inputFile).size;
-
-    execFile(binPath, args, function(err, stdout, stderr) {
-
-        if (verbose) {
-            stdout && console.log(stdout);
-            stderr && console.log(stderr);
-        }
-
-        options.stdout = stdout;
-        options.stderr = stderr;
-
-        if(!err){
-            options.saved = originalSize - fs.statSync(outputFile).size;
-        }
-
-        done(err, options);
-    });
 
 };
 
@@ -89,10 +105,10 @@ exports.run = function (options, done) {
     var dest = options.dest;
     var file = exports.file;
 
-    exports.async.forEach(exports.files, function(inputFile, cb){
+    exports.async.forEach(exports.files, function (inputFile, cb) {
         var outputFile = dest;
         // change to file copy to file
-        if(file.isFile(inputFile) && file.isDirname(dest)){
+        if (file.isFile(inputFile) && file.isDirname(dest)) {
             var filename = path.basename(inputFile);
             outputFile = path.join(dest, filename);
         }
